@@ -8,7 +8,7 @@ COPY go.* ./
 RUN go mod download
 
 COPY main.go ./
-COPY api/* ./
+COPY api/* ./api/
 RUN go build -o /docker-my-server
 
 EXPOSE 3001
