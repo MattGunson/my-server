@@ -10,7 +10,7 @@ import (
 
 const (
 	defaultPort    = "3001"
-	defaultLogFile = "/var/log/svs_access.json"
+	defaultLogFile = "/var/log/api_log.json"
 )
 
 func main() {
