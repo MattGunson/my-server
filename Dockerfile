@@ -1,16 +1,28 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.19-alpine
+## Build
+FROM golang:1.19-buster AS build
 
-WORKDIR /server
+WORKDIR /app
 
-COPY go.* ./
+COPY go.mod ./
+COPY go.sum ./
 RUN go mod download
 
-COPY main.go ./
 COPY api/* ./api/
+COPY *.go ./
+
 RUN go build -o /docker-my-server
+
+## Deploy
+FROM gcr.io/distroless/base-debian10
+
+WORKDIR /
+
+COPY --from=build /docker-my-server /docker-my-server
 
 EXPOSE 3001
 
-CMD [ "/docker-my-server" ]
+USER nonroot:nonroot
+
+ENTRYPOINT ["/docker-my-server"]
