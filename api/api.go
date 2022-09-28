@@ -40,6 +40,10 @@ func NewAPI() (*API, error) {
 
 	router := httprouter.New()
 
+	router.GET("/requests", api.doAuthentication(api.GetAllRequests))
+	router.GET("/profile/all", api.doAuthentication(api.getProfiles))
+	router.GET("/profile", api.doAuthentication(api.getProfile))
+	router.POST("/profile", api.doAuthentication(api.registerProfile))
 	router.GET("/posts/:keyword", api.doAuthentication(api.mockHandler))
 	router.GET("/grouppage/:title", api.doAuthentication(api.mockHandler))
 	router.GET("/pagesearch/:keyword", api.doAuthentication(api.mockHandler))

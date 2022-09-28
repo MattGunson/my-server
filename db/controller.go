@@ -2,34 +2,105 @@ package db
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"os"
 
 	"github.com/jackc/pgx/v4"
 )
 
+var defaultDB = "postgresql://postgres:AY0FNCBK456XYmYkDCIP@containers-us-west-33.railway.app:6744/railway"
+
 type Store struct {
 }
 
-func PostRequest(req Request) {
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+func PostRequest(ctx context.Context, req Request) error {
+	conn, err := openConn(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		return err
+	}
+	defer conn.Close(ctx)
+	_, err = conn.Exec(ctx,
+		"INSERT INTO requests (url, headers, body) VALUES ($1, $2, $3)",
+		req.Url, req.Headers, req.Body)
+	return err
+}
+
+func PostProfile(ctx context.Context, profile Profile) error {
+	conn, err := openConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO profile (email, name, password) VALUES ($1, $2, $3)",
+		profile.Email, profile.Name, profile.Password)
+	return err
+}
+
+func GetProfile(ctx context.Context, email string) (Profile, error) {
+	conn, err := openConn(ctx)
+	if err != nil {
+		return Profile{}, err
+	}
+	defer conn.Close(ctx)
+
+	var prof Profile
+	err = conn.QueryRow(ctx, "SELECT * FROM profile WHERE email=$1;", email).Scan(prof.sync())
+	return prof, err
+}
+
+func GetAllProfiles(ctx context.Context) ([]Profile, error) {
+	conn, err := openConn(ctx)
+	if err != nil {
+		return nil, err
 	}
 	defer conn.Close(context.Background())
 
-	var greeting string
-	err = conn.QueryRow(context.Background(), "select 'Hello, world!'").Scan(&greeting)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-		os.Exit(1)
+	rows, err := conn.Query(context.Background(), "SELECT * FROM profile;")
+	profiles := make([]Profile, 0, 10)
+	var prof Profile
+	for rows.Next() {
+		if err != nil {
+			return nil, err
+		}
+		err = rows.Scan(prof.sync())
+		profiles = append(profiles, prof)
 	}
+	return profiles, nil
+}
 
-	conn.Exec(context.Background(),
-		"INSERT INTO requests (url, headers, body) VALUES ($1, $2, $3)",
-		req.Url, req.Headers, req.Body)
+func GetAllRequests(ctx context.Context) ([]Request, error) {
+	conn, err := openConn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(context.Background())
 
-	fmt.Println(greeting)
-	fmt.Println(req.Url)
+	rows, err := conn.Query(ctx, "select * from requests;")
+	requests := make([]Request, 0, 10)
+	var req Request
+	var headers []byte
+	for rows.Next() {
+		if err != nil {
+			return nil, err
+		}
+		err = rows.Scan(&req.id, &req.Url, &headers, &req.Body)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(headers, &req.Headers)
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, req)
+	}
+	return requests, nil
+}
+
+func openConn(ctx context.Context) (*pgx.Conn, error) {
+	connString := os.Getenv("DATABASE_URL")
+	if connString == "" {
+		connString = defaultDB
+	}
+	return pgx.Connect(ctx, connString)
 }
